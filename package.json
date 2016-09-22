@@ -1,0 +1,32 @@
+{
+  "name": "mute-bot-eve",
+  "version": "0.1.0",
+  "description": "Translator bot for Mute (netflux branch)",
+  "main": "app.js",
+  "scripts": {
+    "build": "rollup -c",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "bot",
+    "mute",
+    "netflux",
+    "translator"
+  ],
+  "author": "Philippe Kalitine",
+  "license": "ISC",
+  "dependencies": {
+    "bufferutil": "^1.2.1",
+    "mute-client": "https://github.com/coast-team/mute-client#netflux",
+    "mute-structs": "0.0.8",
+    "mute-utils": "^0.1.1",
+    "netflux": "^0.10.6",
+    "utf-8-validate": "^1.2.1",
+    "ws": "^1.1.1",
+    "yandex-translate": "^2.1.0"
+  },
+  "devDependencies": {
+    "rollup": "^0.34.0",
+    "rollup-plugin-node-resolve": "^2.0.0"
+  }
+}
