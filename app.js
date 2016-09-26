@@ -1438,7 +1438,8 @@ function isSocket (channel) {
   return channel.constructor.name === 'WebSocket'
 }
 
-const CONNECT_TIMEOUT = 15000
+const CONNECT_TIMEOUT = 30000
+const REMOVE_ITEM_TIMEOUT = 5000
 let src
 let webRTCAvailable = true
 if (isBrowser()) src = window
@@ -1447,6 +1448,7 @@ else {
     src = require('wrtc')
     src.CloseEvent = NodeCloseEvent
   } catch (err) {
+    src = {}
     webRTCAvailable = false
   }
 }
@@ -1623,8 +1625,8 @@ class WebRTCService extends ServiceInterface {
         ws.send(JSON.stringify({join: key}))
       }),
       this.createDataChannel(item.pc, true)
-        .then((channel) => {
-          super.removeItem(ws, key)
+        .then(channel => {
+          setTimeout(() => super.removeItem(ws, key), REMOVE_ITEM_TIMEOUT)
           return channel
         })
     ])
@@ -1714,7 +1716,7 @@ class WebRTCService extends ServiceInterface {
   }
 
   addIceCandidate (obj, candidate) {
-    if (obj.pc && obj.pc.isRemoteDescriptionSet) {
+    if (obj !== null && obj.pc && obj.pc.isRemoteDescriptionSet) {
       obj.pc.addIceCandidate(new RTCIceCandidate$1(candidate))
         .catch(evt => console.error(`Add ICE candidate: ${evt.message}`))
     } else obj.candidates[obj.candidates.length] = candidate
@@ -3218,50 +3220,68 @@ class Bot {
   }
 }
 
-let Coordinator = require('mute-client').Coordinator
-let Utils = require('mute-utils')
+const Coordinator = require('mute-client').Coordinator
+const Utils = require('mute-utils')
+const EventEmitter = require('events')
 
-const bot = new Bot()
-const host = 'localhost'
-const port = 9000
+class TranslatorBot extends EventEmitter {
 
-let coordinator
-let str = ''
+  constructor(options) {
+    super()
+    this.bot = new Bot()
+    this.initBot(options)
+    this.coordinator = null
+    this.wc = null
+  }
 
-bot.listen({host, port, log: true})
-bot.onWebChannel = wc => {
-  wc.onMessage = (id, msg, isBroadcast) => {
+  initBot(options) {
+    this.bot.listen(options)
+      .then((toto) => {
+        console.log(`Bot is listening at ${ options.host }:${ options.port }`)
+      })
+      .catch((err) => {
+        console.log(`An error occurred while starting the bot: ${ err }`)
+      })
+
+    this.bot.onWebChannel = wc => {
+      this.wc = wc
+      wc.onMessage = (id, msg, isBroadcast) => {
+        this.handleMessage(wc, id, msg, isBroadcast)
+      }
+      wc.replicaNumber = 10000
+      wc.username = 'Eve translator'
+      let userInfo = {
+        peerId : wc.myId,
+        replicaNumber : wc.replicaNumber,
+        username : wc.username
+      }
+      wc.send(JSON.stringify(new Data('queryUserInfo', userInfo)))
+      wc.sendTo(wc.members[0], JSON.stringify(new Data('joinDoc', wc.myId)))
+      wc.send(JSON.stringify(new Data('broadcastCollaboratorUsername', {
+        replicaNumber: userInfo.replicaNumber,
+        username: userInfo.username
+      })))
+    }
+  }
+
+  handleMessage(wc, id, msg, isBroadcast) {
     let data = JSON.parse(msg)
     switch (data.event) {
       case 'sendDoc':
         data.data.replicaNumber = wc.replicaNumber
-        coordinator = new Coordinator(data.data.docID)
-        coordinator.join(data.data)
-        str = data.data.ropes.str
-        console.log('DATA: ', data)
-        console.log('CONTENCT: ' + str)
+        this.coordinator = new Coordinator(data.data.docID)
+        this.coordinator.join(data.data)
+        this.coordinator.on('update', (data) => {
+          // TODO: Plug the translate method here
+          console.log(`this.coordinator.ropes.str: ${ this.coordinator.ropes.str }`)
+        })
         break
       case 'sendOps':
         data.data.replicaNumber = wc.replicaNumber
-        Utils.pushAll(coordinator.bufferLogootSOp, data.data.logootSOperations)
-        console.log('TEXT: ', data.data)
-        console.log('NEW: ' + coordinator.ropes.str)
+        Utils.pushAll(this.coordinator.bufferLogootSOp, data.data.logootSOperations)
         break
     }
   }
-  wc.replicaNumber = 10000
-  wc.username = 'Eve translator'
-  let userInfo = {
-    peerId : wc.myId,
-    replicaNumber : wc.replicaNumber,
-    username : wc.username
-  };
-  wc.send(JSON.stringify(new Data('queryUserInfo', userInfo)));
-  wc.sendTo(wc.members[0], JSON.stringify(new Data('joinDoc', wc.myId)));
-  wc.send(JSON.stringify(new Data('broadcastCollaboratorUsername', {
-    replicaNumber: userInfo.replicaNumber,
-    username: userInfo.username
-  })))
 }
 
 class Data {
@@ -3270,3 +3290,13 @@ class Data {
     this.data = data
   }
 }
+
+let yandex = require('yandex-translate')(process.env.YANDEX_TRANSLATE_API_KEY)
+
+const host = 'localhost'
+const port = 9000
+const log = true
+
+const bot = new TranslatorBot({host, port, log})
+
+console.log('Starting bot...')
