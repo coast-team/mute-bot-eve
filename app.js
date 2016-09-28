@@ -3274,6 +3274,7 @@ class TranslatorBot extends EventEmitter {
         this.coordinator.on('update', (data) => {
           // TODO: Plug the translate method here
           console.log(`this.coordinator.ropes.str: ${ this.coordinator.ropes.str }`)
+          this.seekTextToTranslate()
         })
         break
       case 'sendOps':
@@ -3281,6 +3282,39 @@ class TranslatorBot extends EventEmitter {
         Utils.pushAll(this.coordinator.bufferLogootSOp, data.data.logootSOperations)
         break
     }
+  }
+
+  seekTextToTranslate() {
+    const regex = /^\/tl$(.|\n)*?^end\/$/gm
+    const doc = this.coordinator.ropes.str
+
+    const matches = doc.match(regex)
+    if(matches !== null) {
+      matches.map( match => {
+        // Remove the tag delimiting the begin and the end of the section to translate
+        // TODO: Set the index according to the length of the tags
+        const str = match.substring(3, match.length-5)
+
+        // TODO: Read the source language from the input
+        const source = 'fr'
+
+        // TODO: Read the target language from the input
+        const target = 'en'
+
+        const lines = str.split('\n')
+        // Remove the line containing the source and target language
+        lines.splice(0, 1)
+        const toTranslate = lines.join('\n')
+
+        YandexTranslateService.translate(source, target, toTranslate)
+          .then( translation => {
+            this.addTextOperations(match, translation)
+          })
+      })
+    }
+  }
+
+  addTextOperations(match, translation) {
   }
 }
 
