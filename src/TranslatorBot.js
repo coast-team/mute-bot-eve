@@ -96,6 +96,24 @@ class TranslatorBot extends EventEmitter {
   }
 
   addTextOperations(match, translation) {
+    // TODO: Handle case match occurs several time in the document
+
+    const doc = this.coordinator.ropes.str
+    const index = doc.indexOf(match)
+
+    const deleteText = {
+      'action': 'removeText',
+      'index': index,
+      'text': match
+    }
+    this.coordinator.addBufferTextOp(deleteText)
+
+    const insertText = {
+      'action': 'insertText',
+      'index': index,
+      'text': translation
+    }
+    this.coordinator.addBufferTextOp(insertText)
   }
 }
 
