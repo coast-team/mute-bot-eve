@@ -57,6 +57,13 @@ class TranslatorBot extends EventEmitter {
           console.log(`this.coordinator.ropes.str: ${ this.coordinator.ropes.str }`)
           this.seekTextToTranslate()
         })
+        this.coordinator.on('operations', (operations) => {
+          const data = new Data('sendOps', {
+            replicaNumber: wc.replicaNumber,
+            logootSOperations: operations
+          })
+          wc.send(JSON.stringify(data));
+        })
         break
       case 'sendOps':
         data.data.replicaNumber = wc.replicaNumber
