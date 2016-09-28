@@ -1,4 +1,5 @@
 import {Bot} from 'netflux'
+import YandexTranslateService from './YandexTranslateService'
 
 const Coordinator = require('mute-client').Coordinator
 const Utils = require('mute-utils')
@@ -86,13 +87,15 @@ class TranslatorBot extends EventEmitter {
         lines.splice(0, 1)
         const toTranslate = lines.join('\n')
 
-      translate(source, target, toTranslate)
-    })
+        YandexTranslateService.translate(source, target, toTranslate)
+          .then( translation => {
+            this.addTextOperations(match, translation)
+          })
+      })
+    }
   }
 
-  translate(source, target, str) {
-    // TODO: Call Yandex API to translate text
-    // TODO: Replace the str by the corresponding translation in the document
+  addTextOperations(match, translation) {
   }
 }
 
