@@ -24,6 +24,11 @@ class RealTimeTranslator {
         const index = coordinator.ropes.search({ id: this.tagID, path: []})
         if(index !== -1) {
           this.generateTranslation(index)
+        } else {
+          // The tag has been removed
+          console.log('Tag removed, stop translating...')
+          this.tagID = ''
+          this.isTranslating = false
         }
       }
     })
