@@ -1,9 +1,14 @@
+import YandexTranslateService from './YandexTranslateService'
+
 class RealTimeTranslator {
 
   constructor(coordinator) {
     this.coordinator = coordinator
+
     this.userTag = '/rt'
     this.botTag = '☺'
+
+    this.tagID = ''
     this.isTranslating = false
 
     coordinator.on('update', (data) => {
@@ -15,7 +20,12 @@ class RealTimeTranslator {
           this.replaceTag(index)
         }
       }
-      // TODO: Translate newly inserted text
+      else {
+        const index = coordinator.ropes.search({ id: this.tagID, path: []})
+        if(index !== -1) {
+          this.generateTranslation(index)
+        }
+      }
     })
 
     coordinator.on('operations', (operations) => {
@@ -26,7 +36,8 @@ class RealTimeTranslator {
             this.isTranslating = true
             this.tagID = operation.id
 
-            // TODO: Translate previous text
+            const index = coordinator.ropes.search({ id: this.tagID, path: []})
+            this.generateTranslation(index)
           }
         })
       }
@@ -47,6 +58,44 @@ class RealTimeTranslator {
 
   isInsertingTag(operation) {
     return operation.l === this.botTag
+  }
+
+  generateTranslation(index) {
+    const str = this.coordinator.ropes.str
+
+    const toTranslate = str.substring(0, index)
+
+    // TODO: Read the source language from the input
+    const source = 'fr'
+
+    // TODO: Read the target language from the input
+    const target = 'en'
+
+    YandexTranslateService.translate(source, target, toTranslate)
+      .then( translation => {
+        this.updateTranslation(translation)
+      })
+  }
+
+  updateTranslation(newTranslation) {
+    const str = this.coordinator.ropes.str
+    const index = this.coordinator.ropes.search({ id: this.tagID, path: []})
+
+    const oldTranslation = str.substring(index+1)
+
+    const deleteText = {
+      'action': 'removeText',
+      'index': index+1,
+      'text': oldTranslation
+    }
+    this.coordinator.addBufferTextOp(deleteText)
+
+    const insertText = {
+      'action': 'insertText',
+      'index': index+1,
+      'text': `\n${newTranslation}`
+    }
+    this.coordinator.addBufferTextOp(insertText)
   }
 
   /**
