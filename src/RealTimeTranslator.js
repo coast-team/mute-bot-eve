@@ -1,5 +1,7 @@
 import YandexTranslateService from './YandexTranslateService'
 
+const Diff = require('diff')
+
 class RealTimeTranslator {
 
   constructor(coordinator) {
@@ -88,19 +90,31 @@ class RealTimeTranslator {
 
     const oldTranslation = str.substring(index+1)
 
-    const deleteText = {
-      'action': 'removeText',
-      'index': index+1,
-      'text': oldTranslation
-    }
-    this.coordinator.addBufferTextOp(deleteText)
+    // Add '\n' to put translation below the tag
+    const diffs = Diff.diffChars(oldTranslation, `\n${newTranslation}`)
 
-    const insertText = {
-      'action': 'insertText',
-      'index': index+1,
-      'text': `\n${newTranslation}`
-    }
-    this.coordinator.addBufferTextOp(insertText)
+    let offset = 1
+
+    diffs.map( diff => {
+      if(diff.added) {
+        const insertText = {
+          'action': 'insertText',
+          'index': index+offset,
+          'text': diff.value
+        }
+        this.coordinator.addBufferTextOp(insertText)
+        offset += diff.count
+      } else if (diff.removed) {
+        const deleteText = {
+          'action': 'removeText',
+          'index': index+offset,
+          'text': diff.value
+        }
+        this.coordinator.addBufferTextOp(deleteText)
+      } else {
+        offset += diff.count
+      }
+    })
   }
 
   /**

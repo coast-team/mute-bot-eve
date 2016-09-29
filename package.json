@@ -18,6 +18,7 @@
   "license": "AGPL-3.0",
   "dependencies": {
     "bufferutil": "^1.2.1",
+    "diff": "^3.0.0",
     "mute-client": "https://github.com/coast-team/mute-client#netflux",
     "mute-structs": "0.0.7",
     "mute-utils": "^0.1.1",

@@ -3225,8 +3225,6 @@ const request = require('request')
 class YandexTranslateService {
 
   static translate(source, target, toTranslate) {
-    console.log('On passe ici')
-
     return new Promise( (resolve, reject) => {
       const apiURL = 'https://translate.yandex.net/api/v1.5/tr.json/translate'
 
@@ -3240,23 +3238,20 @@ class YandexTranslateService {
         url: apiURL,
         qs: data
       }, (err, httpResponse, body) => {
-        console.log('Hello ?')
         if(err) {
           console.error(err)
           reject()
         } else {
-          console.log('body: ', body)
           const data = JSON.parse(body)
           resolve(data.text.join(''))
         }
       })
-
-      console.log('On arrive bien jusque là')
-
     })
   }
 
 }
+
+const Diff = require('diff')
 
 class RealTimeTranslator {
 
@@ -3345,20 +3340,32 @@ class RealTimeTranslator {
     const index = this.coordinator.ropes.search({ id: this.tagID, path: []})
 
     const oldTranslation = str.substring(index+1)
+    console.log('oldTranslation: ', oldTranslation)
 
-    const deleteText = {
-      'action': 'removeText',
-      'index': index+1,
-      'text': oldTranslation
-    }
-    this.coordinator.addBufferTextOp(deleteText)
+    const diffs = Diff.diffChars(oldTranslation, '\n' + newTranslation)
 
-    const insertText = {
-      'action': 'insertText',
-      'index': index+1,
-      'text': `\n${newTranslation}`
-    }
-    this.coordinator.addBufferTextOp(insertText)
+    let offset = 1
+
+    diffs.map( diff => {
+      if(diff.added) {
+        const insertText = {
+          'action': 'insertText',
+          'index': index+offset,
+          'text': diff.value
+        }
+        this.coordinator.addBufferTextOp(insertText)
+        offset += diff.count
+      } else if (diff.removed) {
+        const deleteText = {
+          'action': 'removeText',
+          'index': index+offset,
+          'text': diff.value
+        }
+        this.coordinator.addBufferTextOp(deleteText)
+      } else {
+        offset += diff.count
+      }
+    })
   }
 
   /**
