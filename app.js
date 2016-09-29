@@ -3220,10 +3220,40 @@ class Bot {
   }
 }
 
+const request = require('request')
+
 class YandexTranslateService {
 
   static translate(source, target, toTranslate) {
-    return Promise.resolve('Totally legit translated text, trust me')
+    console.log('On passe ici')
+
+    return new Promise( (resolve, reject) => {
+      const apiURL = 'https://translate.yandex.net/api/v1.5/tr.json/translate'
+
+      const data = {
+        key: 'trnsl.1.1.20160914T081041Z.b651034824febda8.9c45d61aa406520b1cb59f6c579d6f9484b3c416',
+        text: toTranslate,
+        lang: `${source}-${target}`
+      }
+
+      request.post({
+        url: apiURL,
+        qs: data
+      }, (err, httpResponse, body) => {
+        console.log('Hello ?')
+        if(err) {
+          console.error(err)
+          reject()
+        } else {
+          console.log('body: ', body)
+          const data = JSON.parse(body)
+          resolve(data.text.join(''))
+        }
+      })
+
+      console.log('On arrive bien jusque là')
+
+    })
   }
 
 }

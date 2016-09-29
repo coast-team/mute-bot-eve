@@ -5,7 +5,7 @@
   "main": "app.js",
   "scripts": {
     "build": "rollup -c",
-    "start" : "npm run build && node app",
+    "start": "npm run build && node app",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -22,6 +22,7 @@
     "mute-structs": "0.0.7",
     "mute-utils": "^0.1.1",
     "netflux": "^0.10.6",
+    "request": "^2.75.0",
     "utf-8-validate": "^1.2.1",
     "ws": "^1.1.1",
     "yandex-translate": "^2.1.0"
