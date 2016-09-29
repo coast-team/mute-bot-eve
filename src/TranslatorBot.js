@@ -1,5 +1,6 @@
 import {Bot} from 'netflux'
 import YandexTranslateService from './YandexTranslateService'
+import RealTimeTranslator from './RealTimeTranslator'
 
 const Coordinator = require('mute-client').Coordinator
 const Utils = require('mute-utils')
@@ -64,6 +65,9 @@ class TranslatorBot extends EventEmitter {
           })
           wc.send(JSON.stringify(data));
         })
+
+        this.realTimeTranslator = new RealTimeTranslator(this.coordinator)
+
         break
       case 'sendOps':
         data.data.replicaNumber = wc.replicaNumber
