@@ -1,4 +1,4 @@
-import {Bot} from 'netflux'
+import {BotServer} from 'netflux'
 import YandexTranslateService from './YandexTranslateService'
 import RealTimeTranslator from './RealTimeTranslator'
 
@@ -10,7 +10,7 @@ class TranslatorBot extends EventEmitter {
 
   constructor(options) {
     super()
-    this.bot = new Bot()
+    this.bot = new BotServer()
     this.initBot(options)
     this.coordinator = null
     this.wc = null
