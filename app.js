@@ -2395,7 +2395,12 @@ class YandexTranslateService {
           reject()
         } else {
           const content = JSON.parse(body)
-          resolve(content.text.join(''))
+          if(content.status === 200) {
+            resolve(content.text.join(''))
+          } else {
+            console.error('An error occurred while querying Yandex API: ', content.message)
+            reject()
+          }
         }
       })
     })
@@ -2523,7 +2528,7 @@ class RealTimeTranslator {
   /**
    * Remove the user tag
    * Insert the bot tag instead
-   * @param {number} index : Index of the tag
+   * @param {number} index : Index of the user tag
    * @return {undefined}
   */
   replaceTag(index) {

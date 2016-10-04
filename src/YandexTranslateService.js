@@ -21,7 +21,12 @@ class YandexTranslateService {
           reject()
         } else {
           const content = JSON.parse(body)
-          resolve(content.text.join(''))
+          if(content.status === 200) {
+            resolve(content.text.join(''))
+          } else {
+            console.error('An error occurred while querying Yandex API: ', content.message)
+            reject()
+          }
         }
       })
     })
