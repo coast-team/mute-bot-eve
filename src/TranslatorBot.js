@@ -6,23 +6,29 @@ const Coordinator = require('mute-client').Coordinator
 const Utils = require('mute-utils')
 const EventEmitter = require('events')
 
+class Data {
+  constructor (event, data) {
+    this.event = event
+    this.data = data
+  }
+}
+
 class TranslatorBot extends EventEmitter {
 
-  constructor(options) {
+  constructor() {
     super()
     this.bot = new BotServer()
-    this.initBot(options)
     this.coordinator = null
     this.wc = null
   }
 
-  initBot(options) {
+  init(options) {
     this.bot.listen(options)
-      .then((toto) => {
-        console.log(`Bot is listening at ${ options.host }:${ options.port }`)
+      .then(() => {
+        console.info(`Bot is listening at ${ options.host }:${ options.port }`)
       })
       .catch((err) => {
-        console.log(`An error occurred while starting the bot: ${ err }`)
+        console.info(`An error occurred while starting the bot: ${ err }`)
       })
 
     this.bot.onWebChannel = wc => {
@@ -32,7 +38,7 @@ class TranslatorBot extends EventEmitter {
       }
       wc.replicaNumber = 10000
       wc.username = 'Eve translator'
-      let userInfo = {
+      const userInfo = {
         peerId : wc.myId,
         replicaNumber : wc.replicaNumber,
         username : wc.username
@@ -47,23 +53,22 @@ class TranslatorBot extends EventEmitter {
   }
 
   handleMessage(wc, id, msg, isBroadcast) {
-    let data = JSON.parse(msg)
+    const data = JSON.parse(msg)
     switch (data.event) {
       case 'sendDoc':
         data.data.replicaNumber = wc.replicaNumber
         this.coordinator = new Coordinator(data.data.docID)
         this.coordinator.join(data.data)
-        this.coordinator.on('update', (data) => {
-          // TODO: Plug the translate method here
-          console.log(`this.coordinator.ropes.str: ${ this.coordinator.ropes.str }`)
+        this.coordinator.on('update', () => {
+          console.info(`this.coordinator.ropes.str: ${ this.coordinator.ropes.str }`)
           this.seekTextToTranslate()
         })
         this.coordinator.on('operations', (operations) => {
-          const data = new Data('sendOps', {
+          const reply = new Data('sendOps', {
             replicaNumber: wc.replicaNumber,
             logootSOperations: operations
           })
-          wc.send(JSON.stringify(data));
+          wc.send(JSON.stringify(reply));
         })
 
         this.realTimeTranslator = new RealTimeTranslator(this.coordinator)
@@ -73,6 +78,8 @@ class TranslatorBot extends EventEmitter {
         data.data.replicaNumber = wc.replicaNumber
         Utils.pushAll(this.coordinator.bufferLogootSOp, data.data.logootSOperations)
         break
+      default:
+        // Mandatory for passing the linter =)
     }
   }
 
@@ -82,7 +89,7 @@ class TranslatorBot extends EventEmitter {
 
     const matches = doc.match(regex)
     if(matches !== null) {
-      matches.map( match => {
+      matches.forEach( match => {
         // Remove the tag delimiting the begin and the end of the section to translate
         // TODO: Set the index according to the length of the tags
         const str = match.substring(3, match.length-5)
@@ -125,13 +132,6 @@ class TranslatorBot extends EventEmitter {
       'text': translation
     }
     this.coordinator.addBufferTextOp(insertText)
-  }
-}
-
-class Data {
-  constructor (event, data) {
-    this.event = event
-    this.data = data
   }
 }
 

@@ -20,8 +20,8 @@ class YandexTranslateService {
           console.error(err)
           reject()
         } else {
-          const data = JSON.parse(body)
-          resolve(data.text.join(''))
+          const content = JSON.parse(body)
+          resolve(content.text.join(''))
         }
       })
     })

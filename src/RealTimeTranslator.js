@@ -18,7 +18,7 @@ class RealTimeTranslator {
       if(!this.isTranslating) {
         const index = this.indexOfUserTag(str)
         if(index !== -1) {
-          console.log('Found the tag!')
+          console.info('Found the tag!')
           this.replaceTag(index)
         }
       }
@@ -28,7 +28,7 @@ class RealTimeTranslator {
           this.generateTranslation(index)
         } else {
           // The tag has been removed
-          console.log('Tag removed, stop translating...')
+          console.info('Tag removed, stop translating...')
           this.tagID = ''
           this.isTranslating = false
         }
@@ -37,9 +37,9 @@ class RealTimeTranslator {
 
     coordinator.on('operations', (operations) => {
       if(!this.isTranslating) {
-        operations.map( operation => {
+        operations.forEach( operation => {
           if(this.isInsertingTag(operation)) {
-            console.log('Start to translate in real-time')
+            console.info('Start to translate in real-time')
             this.isTranslating = true
             this.tagID = operation.id
 
@@ -95,7 +95,7 @@ class RealTimeTranslator {
 
     let offset = 1
 
-    diffs.map( diff => {
+    diffs.forEach( diff => {
       if(diff.added) {
         const insertText = {
           'action': 'insertText',
@@ -120,6 +120,8 @@ class RealTimeTranslator {
   /**
    * Remove the user tag
    * Insert the bot tag instead
+   * @param {number} index : Index of the tag
+   * @return {undefined}
   */
   replaceTag(index) {
     const deleteText = {

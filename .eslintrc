@@ -1,0 +1,9 @@
+{
+    "extends": [
+        "conaclos/esnext-base",
+        "conaclos/node-only-mod"
+    ],
+    "rules": {
+      "no-process-env": 0
+    }
+}

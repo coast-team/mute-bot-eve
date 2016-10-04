@@ -753,10 +753,6 @@ class CandidatesBuffer {
 const WebSocket = isBrowser() ? window.WebSocket : require('ws')
 const CONNECT_TIMEOUT$1 = 10000
 const OPEN = WebSocket.OPEN
-let listenOnSocket = false
-let setListenOnSocket = value => {
-  listenOnSocket = value
-}
 
 class WebSocketService extends ServiceInterface {
 
@@ -783,69 +779,239 @@ class WebSocketService extends ServiceInterface {
 }
 
 class ChannelBuilderService extends ServiceInterface {
+  constructor (id) {
+    super(id)
+    this.WS = [WEBSOCKET]
+    this.WR = [WEBRTC]
+    this.WS_WR = [WEBSOCKET, WEBRTC]
+    this.WR_WS = [WEBRTC, WEBSOCKET]
+  }
+
   connectTo (wc, id) {
     return new Promise((resolve, reject) => {
-      this.setPendingRequest(wc, id, {resolve, reject})
-      let connectors = this.availableConnectors(wc)
-      wc.sendInnerTo(id, this.id, {
-        connectors,
-        botUrl: wc.settings.bot
-      })
+      super.setPendingRequest(wc, id, {resolve, reject})
+      wc.sendInnerTo(id, this.id, this.availableConnectors(wc))
     })
   }
 
   availableConnectors (wc) {
+    let res = {}
     let connectors = []
     if (webRTCAvailable) connectors[connectors.length] = WEBRTC
-    if (listenOnSocket) connectors[connectors.length] = WEBSOCKET
-    let forground = wc.settings.connector
-    if (connectors.length !== 1 && connectors[0] !== forground) {
-      let tmp = connectors[0]
-      connectors[0] = connectors[1]
-      connectors[1] = tmp
+    if (wc.settings.listenOn !== '') {
+      connectors[connectors.length] = WEBSOCKET
+      res.listenOn = wc.settings.listenOn
     }
-    return connectors
+    if (connectors.length === 2 && connectors[0] !== wc.settings.connector) {
+      connectors.reverse()
+    }
+    res.connectors = connectors
+    return res
   }
 
   onChannel (wc, channel, senderId) {
     wc.initChannel(channel, senderId)
       .then(channel => {
-        let pendReq = this.getPendingRequest(wc, senderId)
+        let pendReq = super.getPendingRequest(wc, senderId)
         if (pendReq !== null) pendReq.resolve(channel)
       })
   }
 
   onMessage (channel, senderId, recepientId, msg) {
     let wc = channel.webChannel
-    if (msg.connectors.includes(WEBSOCKET)) {
-      // A Bot server send the message
-      // Try to connect in WebSocket
-      provide(WEBSOCKET).connect(msg.botUrl)
+    let myConnectObj = this.availableConnectors(wc)
+    let myConnectors = myConnectObj.connectors
+
+    if ('failedReason' in msg) {
+      super.getPendingRequest(wc, senderId).reject(msg.failedReason)
+    } else if ('shouldConnect' in msg) {
+      if (this.isEqual(msg.shouldConnect, this.WS)) {
+        provide(WEBSOCKET).connect(msg.listenOn)
+          .then(channel => {
+            channel.send(JSON.stringify({wcId: wc.id, senderId: wc.myId}))
+            this.onChannel(wc, channel, senderId)
+          })
+          .catch(reason => {
+            super.getPendingRequest(wc, senderId).reject(`Failed to establish a socket: ${reason}`)
+          })
+      } else if (this.isEqual(msg.shouldConnect, this.WS_WR)) {
+        provide(WEBSOCKET).connect(msg.listenOn)
+          .then(channel => {
+            channel.send(JSON.stringify({wcId: wc.id, senderId: wc.myId}))
+            this.onChannel(wc, channel, senderId)
+          })
+          .catch(reason => provide(WEBRTC, wc.settings.iceServers).connectOverWebChannel(wc, senderId))
+          .then(channel => this.onChannel(wc, channel, senderId))
+          .catch(reason => {
+            if ('feedbackOnFail' in msg && msg.feedbackOnFail === true) {
+              wc.sendInnerTo(senderId, this.id, {tryOn: this.WS, listenOn: myConnectObj.listenOn})
+            } else {
+              super.getPendingRequest(wc, senderId).reject(`Failed to establish a socket and then a data channel: ${reason}`)
+            }
+          })
+      }
+    } else if ('tryOn' in msg && this.isEqual(msg.tryOn, this.WS)) {
+      provide(WEBSOCKET).connect(msg.listenOn)
         .then(channel => {
           channel.send(JSON.stringify({wcId: wc.id, senderId: wc.myId}))
           this.onChannel(wc, channel, senderId)
         })
-        .catch(() => {
-          provide(WEBRTC, wc.settings.iceServers).connectOverWebChannel(wc, senderId)
-            .then(channel => {
-              this.onChannel(wc, channel, senderId)
-            })
-        })
-    } else {
-      let connectors = this.availableConnectors(wc)
-      if (connectors.includes(WEBSOCKET)) {
-        // The peer who send the message doesn't listen in WebSocket and i'm bot
-        wc.sendInnerTo(senderId, this.id, {
-          connectors,
-          botUrl: wc.settings.bot
-        })
+        .catch(reason => wc.sendInnerTo(senderId, this.id, {failedReason: `Failed to establish a socket: ${reason}`}))
+    } else if ('connectors' in msg) {
+      if (!this.isValid(msg.connectors)) {
+        wc.sendInnerTo(senderId, this.id, {failedReason: `Unknown connectors: ${msg.connectors}`})
       } else {
-        // The peer who send the message doesn't listen in WebSocket and doesn't listen too
-        provide(WEBRTC, wc.settings.iceServers).connectOverWebChannel(wc, senderId)
-          .then(channel => this.onChannel(wc, channel, senderId))
+        // []
+        if (msg.connectors.length === 0) {
+          if (myConnectors.length === 0 || this.isEqual(myConnectors, this.WS)) {
+            wc.sendInnerTo(senderId, this.id, {failedReason: 'No common connectors'})
+          } else {
+            wc.sendInnerTo(senderId, this.id, {shouldConnect: this.WS, listenOn: myConnectObj.listenOn})
+          }
+        }
+
+        // [ws]
+        if (this.isEqual(msg.connectors, this.WS)) {
+          if (myConnectors.length === 0 || this.isEqual(myConnectors, this.WS)) {
+            this.ws(wc, senderId, msg.listenOn)
+          } else {
+            this.wsWs(wc, senderId, msg.listenOn, myConnectObj.listenOn)
+          }
+        }
+
+        // [wr]
+        if (this.isEqual(msg.connectors, this.WR)) {
+          if (myConnectors.length === 0) {
+            wc.sendInnerTo(senderId, this.id, {failedReason: 'No common connectors'})
+          } else if (this.isEqual(myConnectors, this.WS)) {
+            wc.sendInnerTo(senderId, this.id, {shouldConnect: this.WS, listenOn: myConnectObj.listenOn})
+          } else if (this.isEqual(myConnectors, this.WR)) {
+            provide(WEBRTC, wc.settings.iceServers).connectOverWebChannel(wc, senderId)
+              .then(channel => this.onChannel(wc, channel, senderId))
+              .catch(reason => {
+                wc.sendInnerTo(senderId, this.id, {failedReason: `Failed establish a data channel: ${reason}`})
+              })
+          } else if (this.isEqual(myConnectors, this.WS_WR)) {
+            wc.sendInnerTo(senderId, this.id, {shouldConnect: this.WS_WR, listenOn: myConnectObj.listenOn})
+          } else if (this.isEqual(myConnectors, this.WR_WS)) {
+            provide(WEBRTC, wc.settings.iceServers).connectOverWebChannel(wc, senderId)
+              .then(channel => this.onChannel(wc, channel, senderId))
+              .catch(reason => {
+                wc.sendInnerTo(senderId, this.id, {shouldConnect: this.WS, listenOn: myConnectObj.listenOn})
+              })
+          }
+        }
+
+        // [ws, wr]
+        if (this.isEqual(msg.connectors, this.WS_WR)) {
+          if (myConnectors.length === 0) {
+            this.ws(wc, senderId, msg.listenOn)
+          } else if (this.isEqual(myConnectors, this.WS)) {
+            this.wsWs(wc, senderId, msg.listenOn, myConnectObj.listenOn)
+          } else if (this.isEqual(myConnectors, this.WR)) {
+            provide(WEBSOCKET).connect(msg.listenOn)
+              .then(channel => {
+                channel.send(JSON.stringify({wcId: wc.id, senderId: wc.myId}))
+                this.onChannel(wc, channel, senderId)
+              })
+              .catch(reason => provide(WEBRTC, wc.settings.iceServers).connectOverWebChannel(wc, senderId))
+              .then(channel => this.onChannel(wc, channel, senderId))
+              .catch(reason => wc.sendInnerTo(senderId, this.id, {failedReason: `Failed to establish a socket and then a data channel: ${reason}`}))
+          } else if (this.isEqual(myConnectors, this.WS_WR)) {
+            provide(WEBSOCKET).connect(msg.listenOn)
+              .then(channel => {
+                channel.send(JSON.stringify({wcId: wc.id, senderId: wc.myId}))
+                this.onChannel(wc, channel, senderId)
+              })
+          } else if (this.isEqual(myConnectors, this.WR_WS)) {
+            wc.sendInnerTo(senderId, this.id, {shouldConnect: this.WS_WR, listenOn: myConnectObj.listenOn})
+          } else {
+            provide(WEBSOCKET).connect(msg.listenOn)
+              .then(channel => {
+                channel.send(JSON.stringify({wcId: wc.id, senderId: wc.myId}))
+                this.onChannel(wc, channel, senderId)
+              })
+              .catch(reason => provide(WEBRTC, wc.settings.iceServers).connectOverWebChannel(wc, senderId))
+              .then(channel => this.onChannel(wc, channel, senderId))
+              .catch(reason => wc.sendInnerTo(senderId, this.id, {shouldConnect: this.WS, listenOn: myConnectObj.listenOn}))
+          }
+        }
+
+        // [wr, ws]
+        if (this.isEqual(msg.connectors, this.WR_WS)) {
+          if (myConnectors.length === 0) {
+            this.ws(wc, senderId, msg.listenOn)
+          } else if (this.isEqual(myConnectors, this.WS)) {
+            this.wsWs(wc, senderId, msg.listenOn, myConnectObj.listenOn)
+          } else if (this.isEqual(myConnectors, this.WR)) {
+            provide(WEBRTC, wc.settings.iceServers)
+              .connectOverWebChannel(wc, senderId)
+              .then(channel => this.onChannel(wc, channel, senderId))
+              .catch(reason => provide(WEBSOCKET).connect(msg.listenOn))
+              .then(channel => {
+                channel.send(JSON.stringify({wcId: wc.id, senderId: wc.myId}))
+                this.onChannel(wc, channel, senderId)
+              })
+              .catch(reason => wc.sendInnerTo(senderId, this.id, {failedReason: `Failed to establish a data channel and then a socket: ${reason}`}))
+          } else if (this.isEqual(myConnectors, this.WS_WR)) {
+            wc.sendInnerTo(senderId, this.id, {shouldConnect: this.WS_WR, feedbackOnFail: true, listenOn: myConnectObj.listenOn})
+          } else if (this.isEqual(myConnectors, this.WR_WS)) {
+            provide(WEBRTC, wc.settings.iceServers)
+              .connectOverWebChannel(wc, senderId)
+              .then(channel => this.onChannel(wc, channel, senderId))
+              .catch(reason => provide(WEBSOCKET).connect(msg.listenOn))
+              .then(channel => {
+                channel.send(JSON.stringify({wcId: wc.id, senderId: wc.myId}))
+                this.onChannel(wc, channel, senderId)
+              })
+              .catch(reason => wc.sendInnerTo(senderId, this.id, {shouldConnect: this.WS, listenOn: myConnectObj.listenOn}))
+          }
+        }
       }
     }
   }
+
+  wsWs (wc, senderId, peerWsURL, myWsURL) {
+    provide(WEBSOCKET).connect(peerWsURL)
+      .then(channel => {
+        channel.send(JSON.stringify({wcId: wc.id, senderId: wc.myId}))
+        this.onChannel(wc, channel, senderId)
+      })
+      .catch(reason => {
+        wc.sendInnerTo(senderId, this.id, {shouldConnect: this.WS, listenOn: myWsURL})
+      })
+  }
+
+  ws (wc, senderId, peerWsURL) {
+    provide(WEBSOCKET).connect(peerWsURL)
+      .then(channel => {
+        channel.send(JSON.stringify({wcId: wc.id, senderId: wc.myId}))
+        this.onChannel(wc, channel, senderId)
+      })
+      .catch(reason => {
+        wc.sendInnerTo(senderId, this.id, {
+          failedReason: `Failed to establish a socket: ${reason}`
+        })
+      })
+  }
+
+  isValid (connectors) {
+    if (this.isEqual(connectors, this.WS) ||
+      this.isEqual(connectors, this.WR) ||
+      this.isEqual(connectors, this.WS_WR) ||
+      this.isEqual(connectors, this.WR_WS)
+    ) return true
+    return false
+  }
+
+  isEqual (arr1, arr2) {
+    if (arr1.length !== arr2.length) return false
+    for (let i = 0; i < arr1.length; i++) {
+      if (arr1[i] !== arr2[i]) return false
+    }
+    return true
+  }
+
 }
 
 /**
@@ -2117,20 +2283,18 @@ class BotServer {
 
   listen (options = {}) {
     return new Promise((resolve, reject) => {
-      this.settings = Object.assign({}, this.settings, options)
+      let settings = Object.assign({}, this.settings, options)
+      settings.listenOn = this.getURL(settings.host, settings.port)
       let WebSocketServer = require('ws').Server
       this.server = new WebSocketServer({
-        host: this.settings.host,
-        port: this.settings.port
-      }, () => {
-        setListenOnSocket(true)
-        resolve()
-      })
+        host: settings.host,
+        port: settings.port
+      }, resolve)
 
       this.server.on('error', (err) => {
-        console.log('Server error: ', err)
+        console.error('Server error: ', err)
         setListenOnSocket(false)
-        reject('WebSocketServerError with ws://' + this.settings.host + ':' + this.settings.port)
+        reject('WebSocketServerError with ws://' + settings.host + ':' + settings.port)
       })
 
       this.server.on('connection', ws => {
@@ -2148,7 +2312,7 @@ class BotServer {
             } else if ('wcId' in msg) {
               let wc = this.getWebChannel(msg.wcId)
               if (wc === null) {
-                if (wc === null) wc = new WebChannel(this.settings)
+                if (wc === null) wc = new WebChannel(settings)
                 wc.id = msg.wcId
                 this.addWebChannel(wc)
                 wc.join(ws).then(() => { this.onWebChannel(wc) })
@@ -2192,6 +2356,10 @@ class BotServer {
     }
     this.webChannels.splice(index, 1)[0].leave()
   }
+
+  getURL (host, port) {
+    return `ws://${host}:${port}`
+  }
 }
 
 let defaultSettings = {
@@ -2200,7 +2368,8 @@ let defaultSettings = {
   signalingURL: 'wss://sigver-coastteam.rhcloud.com:8443',
   iceServers: [
     {urls: 'stun:turn01.uswest.xirsys.com'}
-  ]
+  ],
+  listenOn: ''
 }
 
 const request = require('request')
@@ -2225,8 +2394,8 @@ class YandexTranslateService {
           console.error(err)
           reject()
         } else {
-          const data = JSON.parse(body)
-          resolve(data.text.join(''))
+          const content = JSON.parse(body)
+          resolve(content.text.join(''))
         }
       })
     })
@@ -2252,7 +2421,7 @@ class RealTimeTranslator {
       if(!this.isTranslating) {
         const index = this.indexOfUserTag(str)
         if(index !== -1) {
-          console.log('Found the tag!')
+          console.info('Found the tag!')
           this.replaceTag(index)
         }
       }
@@ -2262,7 +2431,7 @@ class RealTimeTranslator {
           this.generateTranslation(index)
         } else {
           // The tag has been removed
-          console.log('Tag removed, stop translating...')
+          console.info('Tag removed, stop translating...')
           this.tagID = ''
           this.isTranslating = false
         }
@@ -2271,9 +2440,9 @@ class RealTimeTranslator {
 
     coordinator.on('operations', (operations) => {
       if(!this.isTranslating) {
-        operations.map( operation => {
+        operations.forEach( operation => {
           if(this.isInsertingTag(operation)) {
-            console.log('Start to translate in real-time')
+            console.info('Start to translate in real-time')
             this.isTranslating = true
             this.tagID = operation.id
 
@@ -2329,7 +2498,7 @@ class RealTimeTranslator {
 
     let offset = 1
 
-    diffs.map( diff => {
+    diffs.forEach( diff => {
       if(diff.added) {
         const insertText = {
           'action': 'insertText',
@@ -2354,6 +2523,8 @@ class RealTimeTranslator {
   /**
    * Remove the user tag
    * Insert the bot tag instead
+   * @param {number} index : Index of the tag
+   * @return {undefined}
   */
   replaceTag(index) {
     const deleteText = {
@@ -2376,23 +2547,29 @@ const Coordinator = require('mute-client').Coordinator
 const Utils = require('mute-utils')
 const EventEmitter = require('events')
 
+class Data {
+  constructor (event, data) {
+    this.event = event
+    this.data = data
+  }
+}
+
 class TranslatorBot extends EventEmitter {
 
-  constructor(options) {
+  constructor() {
     super()
     this.bot = new BotServer()
-    this.initBot(options)
     this.coordinator = null
     this.wc = null
   }
 
-  initBot(options) {
+  init(options) {
     this.bot.listen(options)
-      .then((toto) => {
-        console.log(`Bot is listening at ${ options.host }:${ options.port }`)
+      .then(() => {
+        console.info(`Bot is listening at ${ options.host }:${ options.port }`)
       })
       .catch((err) => {
-        console.log(`An error occurred while starting the bot: ${ err }`)
+        console.info(`An error occurred while starting the bot: ${ err }`)
       })
 
     this.bot.onWebChannel = wc => {
@@ -2402,7 +2579,7 @@ class TranslatorBot extends EventEmitter {
       }
       wc.replicaNumber = 10000
       wc.username = 'Eve translator'
-      let userInfo = {
+      const userInfo = {
         peerId : wc.myId,
         replicaNumber : wc.replicaNumber,
         username : wc.username
@@ -2417,23 +2594,22 @@ class TranslatorBot extends EventEmitter {
   }
 
   handleMessage(wc, id, msg, isBroadcast) {
-    let data = JSON.parse(msg)
+    const data = JSON.parse(msg)
     switch (data.event) {
       case 'sendDoc':
         data.data.replicaNumber = wc.replicaNumber
         this.coordinator = new Coordinator(data.data.docID)
         this.coordinator.join(data.data)
-        this.coordinator.on('update', (data) => {
-          // TODO: Plug the translate method here
-          console.log(`this.coordinator.ropes.str: ${ this.coordinator.ropes.str }`)
+        this.coordinator.on('update', () => {
+          console.info(`this.coordinator.ropes.str: ${ this.coordinator.ropes.str }`)
           this.seekTextToTranslate()
         })
         this.coordinator.on('operations', (operations) => {
-          const data = new Data('sendOps', {
+          const reply = new Data('sendOps', {
             replicaNumber: wc.replicaNumber,
             logootSOperations: operations
           })
-          wc.send(JSON.stringify(data));
+          wc.send(JSON.stringify(reply));
         })
 
         this.realTimeTranslator = new RealTimeTranslator(this.coordinator)
@@ -2443,6 +2619,8 @@ class TranslatorBot extends EventEmitter {
         data.data.replicaNumber = wc.replicaNumber
         Utils.pushAll(this.coordinator.bufferLogootSOp, data.data.logootSOperations)
         break
+      default:
+        // Mandatory for passing the linter =)
     }
   }
 
@@ -2452,7 +2630,7 @@ class TranslatorBot extends EventEmitter {
 
     const matches = doc.match(regex)
     if(matches !== null) {
-      matches.map( match => {
+      matches.forEach( match => {
         // Remove the tag delimiting the begin and the end of the section to translate
         // TODO: Set the index according to the length of the tags
         const str = match.substring(3, match.length-5)
@@ -2498,19 +2676,11 @@ class TranslatorBot extends EventEmitter {
   }
 }
 
-class Data {
-  constructor (event, data) {
-    this.event = event
-    this.data = data
-  }
-}
-
-let yandex = require('yandex-translate')(process.env.YANDEX_TRANSLATE_API_KEY)
-
 const host = 'localhost'
 const port = 9000
 const log = true
 
-const bot = new TranslatorBot({host, port, log})
+const bot = new TranslatorBot()
+bot.init({host, port, log})
 
-console.log('Starting bot...')
+console.info('Starting bot...')

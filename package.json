@@ -30,6 +30,10 @@
   },
   "devDependencies": {
     "rollup": "^0.34.0",
-    "rollup-plugin-node-resolve": "^2.0.0"
+    "rollup-plugin-node-resolve": "^2.0.0",
+    "eslint": "~3.7.0",
+    "eslint-config-conaclos": "^1.2.1",
+    "eslint-plugin-promise": ">=2.0.1",
+    "eslint-plugin-extra-rules": ">=0.6.1"
   }
 }
