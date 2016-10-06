@@ -55,6 +55,13 @@ class TranslatorBot extends EventEmitter {
   handleMessage(wc, id, msg, isBroadcast) {
     const data = JSON.parse(msg)
     switch (data.event) {
+      case 'queryUserInfo':
+        this.wc.sendTo(id, JSON.stringify(new Data('addUser', {
+            peerId : this.wc.myId,
+            replicaNumber : this.wc.replicaNumber,
+            username : this.wc.username
+        })))
+        break
       case 'sendDoc':
         data.data.replicaNumber = wc.replicaNumber
         this.coordinator = new Coordinator(data.data.docID)

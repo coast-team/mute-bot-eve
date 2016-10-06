@@ -5,8 +5,7 @@
   "main": "app.js",
   "scripts": {
     "build": "rollup -c",
-    "start": "npm run build && node app",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "prestart": "npm run build"
   },
   "keywords": [
     "bot",
