@@ -1,4 +1,4 @@
-import YandexTranslateService from './YandexTranslateService'
+const Yandex = require('yandex-translate')(process.env.YANDEX_TRANSLATE_API_KEY)
 
 const Diff = require('diff')
 
@@ -72,16 +72,16 @@ class RealTimeTranslator {
 
     const toTranslate = str.substring(0, index)
 
-    // TODO: Read the source language from the input
-    const source = 'fr'
-
     // TODO: Read the target language from the input
     const target = 'en'
 
-    YandexTranslateService.translate(source, target, toTranslate)
-      .then( translation => {
-        this.updateTranslation(translation)
-      })
+    Yandex.translate(toTranslate, {to: target}, (err, res) => {
+      if (res.code === 200) {
+        this.updateTranslation(res.text)
+      } else {
+        console.error('Tranlation error: ', err)
+      }
+    })
   }
 
   updateTranslation(newTranslation) {

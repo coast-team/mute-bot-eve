@@ -1,6 +1,6 @@
 import {BotServer} from 'netflux'
-import YandexTranslateService from './YandexTranslateService'
 import RealTimeTranslator from './RealTimeTranslator'
+const Yandex = require('yandex-translate')(process.env.YANDEX_TRANSLATE_API_KEY)
 
 const Coordinator = require('mute-client').Coordinator
 const Utils = require('mute-utils')
@@ -101,9 +101,6 @@ class TranslatorBot extends EventEmitter {
         // TODO: Set the index according to the length of the tags
         const str = match.substring(3, match.length-5)
 
-        // TODO: Read the source language from the input
-        const source = 'fr'
-
         // TODO: Read the target language from the input
         const target = 'en'
 
@@ -112,10 +109,13 @@ class TranslatorBot extends EventEmitter {
         lines.splice(0, 1)
         const toTranslate = lines.join('\n')
 
-        YandexTranslateService.translate(source, target, toTranslate)
-          .then( translation => {
-            this.addTextOperations(match, translation)
-          })
+        Yandex.translate(toTranslate, {to: target}, (err, res) => {
+          if (res.code === 200) {
+            this.addTextOperations(match, res.text)
+          } else {
+            console.error('Tranlation error: ', err)
+          }
+        })
       })
     }
   }
