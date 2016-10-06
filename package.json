@@ -17,6 +17,7 @@
   "license": "AGPL-3.0",
   "dependencies": {
     "bufferutil": "^1.2.1",
+    "commander": "^2.9.0",
     "diff": "^3.0.0",
     "mute-client": "https://github.com/coast-team/mute-client#netflux",
     "mute-structs": "0.0.7",
@@ -28,7 +29,7 @@
     "yandex-translate": "^2.1.0"
   },
   "devDependencies": {
-    "rollup": "^0.34.0",
+    "rollup": "^0.36.0",
     "rollup-plugin-node-resolve": "^2.0.0",
     "eslint": "~3.7.0",
     "eslint-config-conaclos": "^1.2.1",

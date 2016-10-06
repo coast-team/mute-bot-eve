@@ -2,7 +2,7 @@ import {BotServer} from 'netflux'
 import RealTimeTranslator from './RealTimeTranslator'
 const Yandex = require('yandex-translate')(process.env.YANDEX_TRANSLATE_API_KEY)
 
-const Coordinator = require('mute-client').Coordinator
+const Coordinator = require('./node_modules/mute-client/lib/coordinator.js')
 const Utils = require('mute-utils')
 const EventEmitter = require('events')
 
