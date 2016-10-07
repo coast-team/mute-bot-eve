@@ -2869,9 +2869,6 @@ class TranslatorBot extends EventEmitter {
       })
 
     this.bot.onWebChannel = wc => {
-      setTimeout(() => {
-        wc.leave()
-      }, 7000)
       this.wc = wc
       wc.onMessage = (id, msg, isBroadcast) => {
         this.handleMessage(wc, id, msg, isBroadcast)
@@ -2990,7 +2987,7 @@ let port = process.env.SERVER_PORT || 9000
 program
   .version('0.1.0', '-v, --version')
   .option('-h, --host <n>', 'specify host (DEFAULT: SERVER_HOST || "127.0.0.1")')
-  .option('-p, --port <n>', 'specify port (DEFAULT: SERVER_PORT || 8000)')
+  .option('-p, --port <n>', 'specify port (DEFAULT: SERVER_PORT || 9000)')
   .on('--help', () => {
     console.log(
 `  Example:
