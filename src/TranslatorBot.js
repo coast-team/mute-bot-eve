@@ -17,13 +17,14 @@ class TranslatorBot extends EventEmitter {
 
   constructor() {
     super()
-    this.bot = new BotServer()
+    this.bot = null
     this.coordinator = null
     this.wc = null
   }
 
   init(options) {
-    this.bot.listen(options)
+    this.bot = new BotServer(options)
+    this.bot.start()
       .then(() => {
         console.info(`Bot is listening at ${ options.host }:${ options.port }`)
       })
