@@ -1,5 +1,7 @@
 # Translator bot for MUTE editor
 
+[![Greenkeeper badge](https://badges.greenkeeper.io/coast-team/mute-bot-eve.svg)](https://greenkeeper.io/)
+
 ## Install
 Get Yandex translate API key from: https://tech.yandex.com/keys/get/?service=trnsl
 
